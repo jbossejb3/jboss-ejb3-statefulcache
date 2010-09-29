@@ -1,0 +1,46 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+
+  <!-- Parent -->
+  <parent>
+    <groupId>org.jboss.ejb3.statefulcache</groupId>
+    <artifactId>jboss-ejb3-statefulcache</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+  </parent>
+
+  <modelVersion>4.0.0</modelVersion>
+  
+  <!-- Artifact Information -->
+  <artifactId>jboss-ejb3-statefulcache-jbc</artifactId>
+  <packaging>jar</packaging>
+  <version>1.0.0-SNAPSHOT</version>
+  <name>JBoss EJB 3.x JBoss Cache stateful cache provider</name>
+  <url>http://labs.jboss.com/jbossejb3</url>
+  <description>JBoss EJB 3.x JBoss Cache stateful cache provider</description>
+
+  <!-- Dependencies -->
+  <dependencies>
+  
+    <dependency>
+      <groupId>org.jboss.cluster</groupId>
+      <artifactId>jboss-ha-server-api</artifactId>
+      <version>1.1.3.Final</version>
+    </dependency>
+    <dependency>
+      <groupId>org.jboss.cache</groupId>
+      <artifactId>jbosscache-core</artifactId>
+      <version>3.2.6.GA</version>
+    </dependency>
+    
+    <dependency>
+      <groupId>org.jboss.ejb3</groupId>
+      <artifactId>jboss-ejb3-core</artifactId>
+      <version>1.5.2</version>
+    </dependency>
+    <dependency>
+      <groupId>org.jboss.ejb3</groupId>
+      <artifactId>jboss-ejb3-ext-api</artifactId>
+      <version>1.1.1</version>
+    </dependency>
+    
+  </dependencies>
+</project>
