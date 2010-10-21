@@ -51,7 +51,7 @@
     <dependency>
       <groupId>org.jboss.cluster</groupId>
       <artifactId>jboss-ha-server-core</artifactId>
-      <version>1.0.0.Alpha5</version>
+      <version>1.0.0.Alpha6</version>
       <exclusions>
          <exclusion>
             <groupId>org.jboss.cluster</groupId>
@@ -63,7 +63,7 @@
     <dependency>
       <groupId>org.jboss.ejb3</groupId>
       <artifactId>jboss-ejb3-core</artifactId>
-      <version>1.5.2</version>
+      <version>1.5.5</version>
     </dependency>
     <dependency>
       <groupId>org.jboss.ejb3</groupId>
