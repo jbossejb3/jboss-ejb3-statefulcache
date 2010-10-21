@@ -34,7 +34,8 @@ import org.jboss.ha.ispn.invoker.RetryingCacheInvoker;
  */
 public class InfinispanStatefulCacheFactory implements Ejb3CacheFactory
 {
-   private CacheSource source = new DefaultCacheSource(DefaultCacheContainerRegistry.getInstance());
+   private CacheSource cacheSource = new DefaultCacheSource(DefaultCacheContainerRegistry.getInstance());
+   private LockManagerSource lockManagerSource = new DefaultLockManagerSource();
    private ThreadFactory threadFactory = Executors.defaultThreadFactory();
    private CacheInvoker invoker = new RetryingCacheInvoker(0, 0);
 
@@ -46,12 +47,17 @@ public class InfinispanStatefulCacheFactory implements Ejb3CacheFactory
    @SuppressWarnings("deprecation")
    public org.jboss.ejb3.cache.StatefulCache createCache()
    {
-      return new InfinispanStatefulCache(this.source, this.invoker, this.threadFactory);
+      return new InfinispanStatefulCache(this.cacheSource, this.lockManagerSource, this.invoker, this.threadFactory);
+   }
+   
+   public void setLockManagerSource(LockManagerSource source)
+   {
+      this.lockManagerSource = source;
    }
    
    public void setCacheSource(CacheSource source)
    {
-      this.source = source;
+      this.cacheSource = source;
    }
    
    public void setThreadFactory(ThreadFactory threadFactory)

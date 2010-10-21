@@ -30,14 +30,16 @@ import org.easymock.Capture;
 import org.easymock.CaptureType;
 import org.easymock.EasyMock;
 import org.easymock.IMocksControl;
-import org.infinispan.Cache;
+import org.infinispan.AdvancedCache;
+import org.infinispan.context.Flag;
 import org.infinispan.lifecycle.ComponentStatus;
 import org.jboss.ejb3.annotation.CacheConfig;
 import org.jboss.ejb3.cache.ClusteredStatefulCache;
-import org.jboss.ejb3.cache.infinispan.CacheSource;
-import org.jboss.ejb3.cache.infinispan.InfinispanStatefulCache;
 import org.jboss.ejb3.stateful.StatefulBeanContext;
 import org.jboss.ejb3.stateful.StatefulContainer;
+import org.jboss.ha.framework.interfaces.GroupMembershipNotifier;
+import org.jboss.ha.framework.interfaces.GroupRpcDispatcher;
+import org.jboss.ha.framework.server.lock.SharedLocalYieldingClusterLockManager;
 import org.jboss.ha.ispn.invoker.CacheInvoker;
 import org.junit.After;
 import org.junit.Assert;
@@ -50,25 +52,41 @@ import org.junit.Test;
  */
 public class InfinispanStatefulCacheTestCase extends StatefulContainerFactory
 {
+   private static final String SERVICE_NAME = "test-service";
+   
    private IMocksControl control = EasyMock.createStrictControl();
-   private CacheSource source = this.control.createMock(CacheSource.class);
+   private CacheSource cacheSource = this.control.createMock(CacheSource.class);
+   private LockManagerSource lockManagerSource = this.control.createMock(LockManagerSource.class);
    private CacheInvoker invoker = this.control.createMock(CacheInvoker.class);
    @SuppressWarnings("unchecked")
-   private Cache<Object, StatefulBeanContext> cache = this.control.createMock(Cache.class);
-   
+   private AdvancedCache<Object, StatefulBeanContext> cache = this.control.createMock(AdvancedCache.class);
+   private GroupRpcDispatcher rpcDispatcher = this.control.createMock(GroupRpcDispatcher.class);
+   private GroupMembershipNotifier membershipNotifier = this.control.createMock(GroupMembershipNotifier.class);
+
+   private SharedLocalYieldingClusterLockManager lockManager;
    private StatefulContainer container;
    private StatefulBeanContext context;  
    
-   private ClusteredStatefulCache statefulCache = new InfinispanStatefulCache(this.source, this.invoker, Executors.defaultThreadFactory());
+   private ClusteredStatefulCache statefulCache = new InfinispanStatefulCache(this.cacheSource, this.lockManagerSource, this.invoker, Executors.defaultThreadFactory());
    
    @SuppressWarnings("deprecation")
    @Before
    public void before() throws Exception
    {
+//      EasyMock.expect(this.rpcDispatcher.isConsistentWith(EasyMock.same(this.membershipNotifier))).andReturn(true);
+      
+//      this.control.replay();
+      
+//      this.lockManager = new SharedLocalYieldingClusterLockManager(SERVICE_NAME, this.rpcDispatcher, this.membershipNotifier);
+
+//      this.control.verify();
+//      this.control.reset();
+      
       this.container = this.createContainer(TestBean.class);
       this.context = new InfinispanStatefulCache.InfinispanStatefulBeanContext(this.container, new TestBean());
       
-      EasyMock.expect(this.source.<Object, StatefulBeanContext>getCache(EasyMock.same(this.container))).andReturn(this.cache);
+      EasyMock.expect(this.cacheSource.<Object, StatefulBeanContext>getCache(EasyMock.same(this.container))).andReturn(this.cache);
+      EasyMock.expect(this.lockManagerSource.getLockManager(EasyMock.same(this.cache))).andReturn(null);
       
       this.control.replay();
       
@@ -95,6 +113,9 @@ public class InfinispanStatefulCacheTestCase extends StatefulContainerFactory
       this.control.reset();
       
       this.cache.removeListener(EasyMock.same(this.statefulCache));
+      EasyMock.expect(this.cache.getAdvancedCache()).andReturn(this.cache);
+      EasyMock.expect(this.cache.withFlags(Flag.CACHE_MODE_LOCAL)).andReturn(this.cache);
+      this.cache.clear();
       this.cache.stop();
       
       this.control.replay();
@@ -146,6 +167,9 @@ public class InfinispanStatefulCacheTestCase extends StatefulContainerFactory
       this.statefulCache.release(this.context);
 
       this.control.verify();
+      
+      Assert.assertFalse(this.context.isInUse());
+      
       this.control.reset();
    }
 
