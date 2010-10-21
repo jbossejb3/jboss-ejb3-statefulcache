@@ -21,13 +21,18 @@
  */
 package org.jboss.ejb3.cache.infinispan;
 
+import java.util.Locale;
+import java.util.concurrent.TimeUnit;
+
 import org.infinispan.Cache;
 import org.infinispan.config.Configuration;
 import org.infinispan.config.Configuration.CacheMode;
 import org.infinispan.manager.EmbeddedCacheManager;
 import org.jboss.ejb3.annotation.CacheConfig;
+import org.jboss.ejb3.annotation.CacheProperty;
 import org.jboss.ejb3.stateful.StatefulContainer;
 import org.jboss.ha.ispn.CacheContainerRegistry;
+import org.jboss.logging.Logger;
 
 /**
  * @author Paul Ferraro
@@ -35,6 +40,12 @@ import org.jboss.ha.ispn.CacheContainerRegistry;
  */
 public class DefaultCacheSource implements CacheSource
 {
+   public static final String PREFIX = "infinispan.";
+   public static final String MODE = "mode";
+   public static final String OWNERS = "owners";
+   
+   private static final Logger log = Logger.getLogger(DefaultCacheSource.class);
+   
    private final CacheContainerRegistry registry;
    
    public DefaultCacheSource(CacheContainerRegistry registry)
@@ -72,57 +83,57 @@ public class DefaultCacheSource implements CacheSource
       
       EmbeddedCacheManager container = this.registry.getCacheContainer(containerName);
       
-      this.applyOverrides(container.defineConfiguration(cacheName, templateCacheName, new Configuration()), cacheConfig);
-      
-      return container.getCache(cacheName);
-   }
+      Configuration configuration = container.defineConfiguration(cacheName, templateCacheName, new Configuration());
 
-   private void applyOverrides(Configuration configuration, CacheConfig cacheConfig)
-   {
-      int backups = cacheConfig.backups();
-      CacheConfig.Mode mode = cacheConfig.mode();
-      
-      CacheMode cacheMode = configuration.getCacheMode();
-      
-      if (backups != CacheConfig.DEFAULT_BACKUPS)
+      for (CacheProperty cacheProperty: cacheConfig.properties())
       {
-         configuration.setNumOwners(backups);
+         String name = cacheProperty.name();
          
-         if (backups == CacheConfig.NO_BACKUPS)
+         if (!name.startsWith(PREFIX))
          {
-            cacheMode = CacheMode.LOCAL;
+            log.debug(String.format("Ignoring cache property \"%s\" for bean %s", name, cacheName));
+            continue;
+         }
+
+         String property = name.substring(PREFIX.length());
+         String value = cacheProperty.value();
+         
+         if (property.equals(MODE))
+         {
+            try
+            {
+               configuration.setCacheMode(CacheMode.valueOf(value.toUpperCase(Locale.ENGLISH)));
+            }
+            catch (IllegalArgumentException e)
+            {
+               throw new IllegalArgumentException(String.format("\"%s\" is not a valid \"%s\" for bean %s  Valid modes: %s", value, name, cacheName, CacheMode.values()), e);
+            }
+         }
+         else if (property.equals(OWNERS))
+         {
+            try
+            {
+               configuration.setNumOwners(Integer.valueOf(value));
+            }
+            catch (NumberFormatException e)
+            {
+               throw new IllegalArgumentException(String.format("\"%s\" is not a valid \"%s\" for bean %s  Integer expected.", value, name, cacheName), e);
+            }
          }
          else
          {
-            boolean synchronous = cacheMode.isSynchronous();
-            if (backups > 0)
-            {
-               cacheMode = synchronous ? CacheMode.DIST_SYNC : CacheMode.DIST_ASYNC;
-            }
-            else // Negative backups means total replication
-            {
-               cacheMode = synchronous ? CacheMode.REPL_SYNC : CacheMode.REPL_ASYNC;
-            }
+            log.info(String.format("Ignoring unrecognized cache property \"%s\" for bean %s", name, value));
          }
       }
+
+      configuration.setEvictionMaxEntries(cacheConfig.maxSize());
       
-      if (mode != CacheConfig.Mode.DEFAULT)
+      if (configuration.getCacheMode().isDistributed())
       {
-         switch (mode)
-         {
-            case SYNCHRONOUS:
-            {
-               cacheMode = cacheMode.toSync();
-               break;
-            }
-            case ASYNCHRONOUS:
-            {
-               cacheMode = cacheMode.toAsync();
-               break;
-            }
-         }
+         configuration.setL1CacheEnabled(true);
+         configuration.setL1Lifespan(TimeUnit.SECONDS.toMillis(cacheConfig.idleTimeoutSeconds()));
       }
       
-      configuration.setCacheMode(cacheMode);
+      return container.getCache(cacheName);
    }
 }
