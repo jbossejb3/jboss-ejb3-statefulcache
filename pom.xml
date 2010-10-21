@@ -34,7 +34,6 @@
    </issueManagement>
 
    <modules>
-      <module>simple</module>
       <module>jbosscache</module>
       <module>infinispan</module>
    </modules>
