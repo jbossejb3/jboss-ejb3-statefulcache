@@ -22,7 +22,7 @@
     <dependency>
       <groupId>org.infinispan</groupId>
       <artifactId>infinispan-core</artifactId>
-      <version>4.2.0-SNAPSHOT</version>
+      <version>4.2.0.ALPHA4</version>
       <exclusions>
         <exclusion>
           <groupId>log4j</groupId>
@@ -39,7 +39,7 @@
     <dependency>
       <groupId>org.jboss.cluster</groupId>
       <artifactId>jboss-ha-server-ispn</artifactId>
-      <version>1.0.0.Alpha14</version>
+      <version>1.0.0.Beta1</version>
       <exclusions>
         <exclusion>
           <groupId>org.infinispan</groupId>
@@ -51,13 +51,7 @@
     <dependency>
       <groupId>org.jboss.cluster</groupId>
       <artifactId>jboss-ha-server-core</artifactId>
-      <version>1.0.0.Alpha6</version>
-      <exclusions>
-         <exclusion>
-            <groupId>org.jboss.cluster</groupId>
-            <artifactId>jboss-ha-server-cache-spi</artifactId>
-         </exclusion>
-      </exclusions>
+      <version>1.0.0.Beta1</version>
     </dependency>
     
     <dependency>
