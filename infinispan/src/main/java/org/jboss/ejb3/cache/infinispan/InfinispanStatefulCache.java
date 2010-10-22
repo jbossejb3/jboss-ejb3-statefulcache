@@ -204,12 +204,10 @@ public class InfinispanStatefulCache implements ClusteredStatefulCache
    @Override
    public void release(StatefulBeanContext bean)
    {
-      this.log.info(String.format("Start release(%s)", bean.getId()));
       synchronized (bean)
       {
          this.setInUse(bean, false);
       }
-      this.log.info(String.format("End release(%s)", bean.getId()));
       
       this.releaseSessionOwnership(bean.getId(), false);
    }
@@ -217,7 +215,6 @@ public class InfinispanStatefulCache implements ClusteredStatefulCache
    @Override
    public void replicate(StatefulBeanContext bean)
    {
-      this.log.info(String.format("Start replicate(%s)", bean.getId()));
       // StatefulReplicationInterceptor should only pass us the ultimate
       // parent context for a tree of nested beans, which should always be
       // a standard StatefulBeanContext
@@ -227,13 +224,11 @@ public class InfinispanStatefulCache implements ClusteredStatefulCache
       }
       
       this.putInCache(bean);
-      this.log.info(String.format("End replicate(%s)", bean.getId()));
    }
 
    @Override
    public void remove(final Object id)
    {
-      this.log.info(String.format("Start remove(%s)", id));
       Operation<StatefulBeanContext> operation = new Operation<StatefulBeanContext>()
       {
          @Override
@@ -308,8 +303,6 @@ public class InfinispanStatefulCache implements ClusteredStatefulCache
       {
          this.releaseSessionOwnership(id, (bean != null) && bean.getCanRemoveFromCache());
       }
-      
-      this.log.info(String.format("End remove(%s)", id));
    }
 
    @Override
@@ -317,7 +310,6 @@ public class InfinispanStatefulCache implements ClusteredStatefulCache
    {
       StatefulBeanContext bean = this.create();
       
-      this.log.info(String.format("Start create(%s)", bean.getId()));
       if (this.log.isTraceEnabled())
       {
          this.log.trace("Caching context " + bean.getId() + " of type " + bean.getClass().getName());
@@ -334,7 +326,6 @@ public class InfinispanStatefulCache implements ClusteredStatefulCache
          this.createCount.incrementAndGet();
          this.resetTotalSize.set(true);
          
-         this.log.info(String.format("End create(%s)", bean.getId()));
          return bean;
       }
       catch (EJBException e)
@@ -420,8 +411,6 @@ public class InfinispanStatefulCache implements ClusteredStatefulCache
    @Override
    public StatefulBeanContext get(final Object id, boolean markInUse) throws EJBException
    {
-      this.log.info(String.format("Start get(%s, %s)", id, markInUse));
-
       StatefulBeanContext bean = this.getFromCache(id);
       
       if (bean == null)
@@ -447,8 +436,7 @@ public class InfinispanStatefulCache implements ClusteredStatefulCache
       {
          this.log.trace("get: retrieved bean with cache id " + id);
       }
-
-      this.log.info(String.format("End get(%s, %s)", id, markInUse));
+      
       return bean;
    }
    
@@ -524,8 +512,6 @@ public class InfinispanStatefulCache implements ClusteredStatefulCache
       // Needed in case this cache is shared
       if ((event.getValue() == null) || !(event.getValue() instanceof StatefulBeanContext)) return;
       
-      Object key = event.getKey();
-      this.log.info(String.format("Start activated(%s)", key));
       StatefulBeanContext bean = (StatefulBeanContext) event.getValue();
       
       this.passivatedCount.decrementAndGet();
@@ -553,7 +539,6 @@ public class InfinispanStatefulCache implements ClusteredStatefulCache
             }
          }
       }
-      this.log.info(String.format("End activated(%s)", key));
    }
 
    @CacheEntryPassivated
@@ -564,7 +549,6 @@ public class InfinispanStatefulCache implements ClusteredStatefulCache
       if ((event.getValue() == null) || !(event.getValue() instanceof StatefulBeanContext)) return;
       
       Object key = event.getKey();
-      this.log.info(String.format("Start passivated(%s)", key));
       
       StatefulBeanContext bean = (StatefulBeanContext) event.getValue();
       
@@ -601,8 +585,6 @@ public class InfinispanStatefulCache implements ClusteredStatefulCache
             switchContext.reset();
          }
       }
-      
-      this.log.info(String.format("End passivated(%s)", key));
    }
    
    private StatefulBeanContext getFromCache(final Object key)
@@ -711,41 +693,7 @@ public class InfinispanStatefulCache implements ClusteredStatefulCache
    
    private Serializable getBeanLockKey(Object id)
    {
-      return new StatefulSessionBeanLockKey(this.cache, id);
-   }
-   
-   static class StatefulSessionBeanLockKey implements Serializable
-   {
-      private static final long serialVersionUID = -2860584406390576136L;
-      private final String cacheName;
-      private final Object id;
-      
-      public StatefulSessionBeanLockKey(Cache<?, ?> cache, Object id)
-      {
-         this.cacheName = cache.getName();
-         this.id = id;
-      }
-
-      @Override
-      public int hashCode()
-      {
-         return this.cacheName.hashCode() ^ this.id.hashCode();
-      }
-
-      @Override
-      public boolean equals(Object object)
-      {
-         if ((object == null) || !(object instanceof StatefulSessionBeanLockKey)) return false;
-         
-         StatefulSessionBeanLockKey key = (StatefulSessionBeanLockKey) object;
-         return this.cacheName.equals(key.cacheName) && this.id.equals(key.id);
-      }
-
-      @Override
-      public String toString()
-      {
-         return this.cacheName + "/" + this.id.toString();
-      }
+      return this.cache.getName() + "/" + id.toString();
    }
    
    class RemoveTask implements Callable<Void>
@@ -760,7 +708,6 @@ public class InfinispanStatefulCache implements ClusteredStatefulCache
       @Override
       public Void call()
       {
-         log.info(String.format("Start RemoveTask(%s)", this.id));
          try
          {
             InfinispanStatefulCache.this.remove(this.id);
@@ -769,7 +716,6 @@ public class InfinispanStatefulCache implements ClusteredStatefulCache
          {
             InfinispanStatefulCache.this.removeFutures.remove(this.id);
          }
-         log.info(String.format("Done RemoveTask(%s)", this.id));
          return null;
       }
    }
@@ -786,7 +732,6 @@ public class InfinispanStatefulCache implements ClusteredStatefulCache
       @Override
       public Void call()
       {
-         log.info("Starting EvictTask");
          try
          {
             InfinispanStatefulCache.this.cache.evict(this.id);
@@ -795,7 +740,6 @@ public class InfinispanStatefulCache implements ClusteredStatefulCache
          {
             InfinispanStatefulCache.this.evictFutures.remove(this.id);
          }
-         log.info("Done EvictTask");
          return null;
       }
    }
