@@ -22,19 +22,26 @@
 package org.jboss.ejb3.cache.infinispan;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 import org.infinispan.Cache;
 import org.infinispan.manager.EmbeddedCacheManager;
+import org.infinispan.notifications.Listener;
+import org.infinispan.notifications.cachemanagerlistener.annotation.CacheStopped;
+import org.infinispan.notifications.cachemanagerlistener.event.CacheStoppedEvent;
 import org.infinispan.remoting.transport.jgroups.JGroupsTransport;
 import org.jboss.ha.core.framework.server.CoreGroupCommunicationService;
 import org.jboss.ha.framework.server.lock.SharedLocalYieldingClusterLockManager;
+import org.jboss.logging.Logger;
 import org.jgroups.Channel;
 
 /**
  * @author Vladimir Blagojevic
  * @author Paul Ferraro
  */
+@Listener(sync = false)
 public class DefaultLockManagerSource implements LockManagerSource
 {
    /** The scope assigned to our group communication service */
@@ -42,7 +49,9 @@ public class DefaultLockManagerSource implements LockManagerSource
    /** The service name of the group communication service */
    public static final String SERVICE_NAME = "SFSBOWNER";
    
-   private final Map<String, SharedLocalYieldingClusterLockManager> lockManagers = new HashMap<String, SharedLocalYieldingClusterLockManager>();
+   private static final Logger log = Logger.getLogger(DefaultLockManagerSource.class);
+   
+   private final Map<String, LockManagerEntry> lockManagers = new HashMap<String, LockManagerEntry>();
    
    /**
     * {@inheritDoc}
@@ -51,49 +60,124 @@ public class DefaultLockManagerSource implements LockManagerSource
    @Override
    public SharedLocalYieldingClusterLockManager getLockManager(Cache<?, ?> cache)
    {
-      if (!cache.getConfiguration().getCacheMode().isClustered()) return null;
+      if (cache.getConfiguration().getCacheMode().isClustered()) return null;
       
       EmbeddedCacheManager container = (EmbeddedCacheManager) cache.getCacheManager();
       String clusterName = container.getGlobalConfiguration().getClusterName();
       
       synchronized (this.lockManagers)
       {
-         SharedLocalYieldingClusterLockManager lockManager = this.lockManagers.get(clusterName);
+         LockManagerEntry entry = this.lockManagers.get(clusterName);
          
-         if (lockManager == null)
+         if (entry == null)
          {
-            JGroupsTransport transport = (JGroupsTransport) cache.getAdvancedCache().getRpcManager().getTransport();
-            Channel channel = transport.getChannel();
+            entry = new LockManagerEntry(cache);
             
-            CoreGroupCommunicationService gcs = new CoreGroupCommunicationService();
-            gcs.setChannel(channel);
-            gcs.setScopeId(SCOPE_ID);
+            container.addListener(this);
             
-            try
-            {
-               gcs.start();
-            }
-            catch (Exception e)
-            {
-               throw new IllegalStateException("Unexpected exception while starting group communication service for " + clusterName);
-            }
-            
-            lockManager = new SharedLocalYieldingClusterLockManager(SERVICE_NAME, gcs, gcs);
-            
-            try
-            {
-               lockManager.start();
-            }
-            catch (Exception e)
-            {
-               gcs.stop();
-               throw new IllegalStateException("Unexpected exception while starting lock manager for " + clusterName);
-            }
-            
-            this.lockManagers.put(clusterName, lockManager);
+            this.lockManagers.put(clusterName, entry);
+         }
+
+         entry.addCache(cache.getName());
+         
+         return entry.getLockManager();
+      }
+   }
+   
+   private static class LockManagerEntry
+   {
+      private SharedLocalYieldingClusterLockManager lockManager;
+      private CoreGroupCommunicationService service;
+      private Set<String> caches = new HashSet<String>();
+      
+      LockManagerEntry(Cache<?, ?> cache)
+      {
+         JGroupsTransport transport = (JGroupsTransport) cache.getAdvancedCache().getRpcManager().getTransport();
+         Channel channel = transport.getChannel();
+         
+         this.service = new CoreGroupCommunicationService();
+         this.service.setChannel(channel);
+         this.service.setScopeId(SCOPE_ID);
+         
+         try
+         {
+            this.service.start();
+         }
+         catch (Exception e)
+         {
+            throw new IllegalStateException("Unexpected exception while starting group communication service for " + channel.getClusterName());
          }
          
-         return lockManager;
+         this.lockManager = new SharedLocalYieldingClusterLockManager(SERVICE_NAME, this.service, this.service);
+         
+         try
+         {
+            this.lockManager.start();
+         }
+         catch (Exception e)
+         {
+            this.service.stop();
+            throw new IllegalStateException("Unexpected exception while starting lock manager for " + channel.getClusterName());
+         }
+      }
+      
+      SharedLocalYieldingClusterLockManager getLockManager()
+      {
+         return this.lockManager;
+      }
+      
+      synchronized void addCache(String cacheName)
+      {
+         this.caches.add(cacheName);
+      }
+      
+      synchronized boolean removeCache(String cacheName)
+      {
+         this.caches.remove(cacheName);
+         
+         boolean empty = this.caches.isEmpty();
+         
+         if (empty)
+         {
+            try
+            {
+               this.lockManager.stop();
+            }
+            catch (Exception e)
+            {
+               log.warn(e.getMessage(), e);
+            }
+            try
+            {
+               this.service.stop();
+            }
+            catch (Exception e)
+            {
+               log.warn(e.getMessage(), e);
+            }
+         }
+         
+         return empty;
+      }
+   }
+   
+   @CacheStopped
+   public void stopped(CacheStoppedEvent event)
+   {
+      String clusterName = event.getCacheManager().getGlobalConfiguration().getClusterName();
+      
+      synchronized (this.lockManagers)
+      {
+         LockManagerEntry entry = this.lockManagers.get(clusterName);
+         
+         if (entry != null)
+         {
+            // Returns true if this was the last cache
+            if (entry.removeCache(event.getCacheName()))
+            {
+               this.lockManagers.remove(clusterName);
+            }
+         }
       }
    }
 }

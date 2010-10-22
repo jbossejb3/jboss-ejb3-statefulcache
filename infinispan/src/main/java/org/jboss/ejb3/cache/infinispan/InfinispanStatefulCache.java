@@ -239,12 +239,11 @@ public class InfinispanStatefulCache implements ClusteredStatefulCache
       };
       
       this.acquireSessionOwnership(id, false);
-      
-      StatefulBeanContext bean = null;
+      boolean remove = false;
       
       try
       {
-         bean = this.invoker.invoke(this.cache, operation);
+         StatefulBeanContext bean = this.invoker.invoke(this.cache, operation);
    
          if (bean == null)
          {
@@ -273,7 +272,7 @@ public class InfinispanStatefulCache implements ClusteredStatefulCache
             
             this.invoker.invoke(this.cache, operation);
             
-            this.releaseSessionOwnership(id, true);
+            remove = true;
          }
          else
          {
@@ -301,7 +300,7 @@ public class InfinispanStatefulCache implements ClusteredStatefulCache
       }
       finally
       {
-         this.releaseSessionOwnership(id, (bean != null) && bean.getCanRemoveFromCache());
+         this.releaseSessionOwnership(id, remove);
       }
    }
 
