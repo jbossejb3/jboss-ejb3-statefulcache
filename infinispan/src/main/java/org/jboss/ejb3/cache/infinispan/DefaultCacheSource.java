@@ -21,18 +21,14 @@
  */
 package org.jboss.ejb3.cache.infinispan;
 
-import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 import org.infinispan.Cache;
 import org.infinispan.config.Configuration;
-import org.infinispan.config.Configuration.CacheMode;
 import org.infinispan.manager.EmbeddedCacheManager;
 import org.jboss.ejb3.annotation.CacheConfig;
-import org.jboss.ejb3.annotation.CacheProperty;
 import org.jboss.ejb3.stateful.StatefulContainer;
 import org.jboss.ha.ispn.CacheContainerRegistry;
-import org.jboss.logging.Logger;
 
 /**
  * @author Paul Ferraro
@@ -44,7 +40,7 @@ public class DefaultCacheSource implements CacheSource
    public static final String MODE = "mode";
    public static final String OWNERS = "owners";
    
-   private static final Logger log = Logger.getLogger(DefaultCacheSource.class);
+//   private static final Logger log = Logger.getLogger(DefaultCacheSource.class);
    
    private final CacheContainerRegistry registry;
    
@@ -84,7 +80,7 @@ public class DefaultCacheSource implements CacheSource
       EmbeddedCacheManager container = this.registry.getCacheContainer(containerName);
       
       Configuration configuration = container.defineConfiguration(cacheName, templateCacheName, new Configuration());
-
+/*
       for (CacheProperty cacheProperty: cacheConfig.properties())
       {
          String name = cacheProperty.name();
@@ -125,7 +121,7 @@ public class DefaultCacheSource implements CacheSource
             log.info(String.format("Ignoring unrecognized cache property \"%s\" for bean %s", name, value));
          }
       }
-
+*/
       configuration.setEvictionMaxEntries(cacheConfig.maxSize());
       
       if (configuration.getCacheMode().isDistributed())
