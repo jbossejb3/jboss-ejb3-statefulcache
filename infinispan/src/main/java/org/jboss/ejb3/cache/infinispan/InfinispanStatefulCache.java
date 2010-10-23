@@ -99,9 +99,6 @@ public class InfinispanStatefulCache implements ClusteredStatefulCache
    // Defined in start()
    private WeakReference<ClassLoader> classLoaderRef;
 
-   /** Coordinate updates from the cluster */
-//   private Lock ownershipLock = new ReentrantLock();
-   
    public InfinispanStatefulCache(CacheSource cacheSource, LockManagerSource lockManagerSource, CacheInvoker invoker, ThreadFactory threadFactory)
    {
       this.cacheSource = cacheSource;
@@ -198,12 +195,14 @@ public class InfinispanStatefulCache implements ClusteredStatefulCache
    @Override
    public StatefulBeanContext peek(Object id) throws NoSuchEJBException
    {
+      this.trace("peek(%s)", id);
       return this.get(id, false);
    }
 
    @Override
    public void release(StatefulBeanContext bean)
    {
+      this.trace("release(%s)", bean.getId());
       synchronized (bean)
       {
          this.setInUse(bean, false);
@@ -215,6 +214,7 @@ public class InfinispanStatefulCache implements ClusteredStatefulCache
    @Override
    public void replicate(StatefulBeanContext bean)
    {
+      this.trace("replicate(%s)", bean.getId());
       // StatefulReplicationInterceptor should only pass us the ultimate
       // parent context for a tree of nested beans, which should always be
       // a standard StatefulBeanContext
@@ -229,6 +229,7 @@ public class InfinispanStatefulCache implements ClusteredStatefulCache
    @Override
    public void remove(final Object id)
    {
+      this.trace("remove(%s)", id);
       Operation<StatefulBeanContext> operation = new Operation<StatefulBeanContext>()
       {
          @Override
@@ -247,16 +248,16 @@ public class InfinispanStatefulCache implements ClusteredStatefulCache
    
          if (bean == null)
          {
-            throw new NoSuchEJBException("Could not find Stateful bean: " + id);
+            throw new NoSuchEJBException("Could not find bean: " + id);
          }
          
          if (!bean.isRemoved())
          {
             this.container.destroy(bean);
          }
-         else if (this.log.isTraceEnabled())
+         else
          {
-            this.log.trace("remove: " + id + " already removed from pool");
+            this.trace("remove(%s): was already removed from pool", id);
          }
    
          if (bean.getCanRemoveFromCache())
@@ -280,10 +281,7 @@ public class InfinispanStatefulCache implements ClusteredStatefulCache
             // But, we must replicate it so other nodes know the parent is removed!
             this.putInCache(bean);
             
-            if (this.log.isTraceEnabled())
-            {
-               this.log.trace(String.format("remove: removed bean %s cannot be removed from cache", id));
-            }
+            this.trace("remove(%s): cannot yet be removed from the cache", id);
          }
          
          if (this.removeFutures != null)
@@ -308,11 +306,7 @@ public class InfinispanStatefulCache implements ClusteredStatefulCache
    public StatefulBeanContext create(Class<?>[] initTypes, Object[] initValues)
    {
       StatefulBeanContext bean = this.create();
-      
-      if (this.log.isTraceEnabled())
-      {
-         this.log.trace("Caching context " + bean.getId() + " of type " + bean.getClass().getName());
-      }
+      this.trace("Caching context %s of type %s", bean.getId(), bean.getClass().getName());
       
       this.acquireSessionOwnership(bean.getId(), true);
       
@@ -387,29 +381,20 @@ public class InfinispanStatefulCache implements ClusteredStatefulCache
    @Override
    public StatefulBeanContext get(Object id) throws EJBException
    {
-      LockResult result = this.acquireSessionOwnership(id, false);
+      this.trace("get(%s)", id);
       
-      if (result == LockResult.ACQUIRED_FROM_CLUSTER)
+      if (this.acquireSessionOwnership(id, false) == LockResult.ACQUIRED_FROM_CLUSTER)
       {
          this.cache.getAdvancedCache().withFlags(Flag.CACHE_MODE_LOCAL).evict(id);
       }
       
-      try
-      {
-         return this.get(id, true);
-      }
-      finally
-      {
-         if (result != null)
-         {
-            this.releaseSessionOwnership(id, false);
-         }
-      }
+      return this.get(id, true);
    }
 
    @Override
    public StatefulBeanContext get(final Object id, boolean markInUse) throws EJBException
    {
+      this.trace("get(%s, %s)", id, markInUse);
       StatefulBeanContext bean = this.getFromCache(id);
       
       if (bean == null)
@@ -429,11 +414,6 @@ public class InfinispanStatefulCache implements ClusteredStatefulCache
          {
             this.setInUse(bean, true);
          }
-      }
-
-      if (this.log.isTraceEnabled())
-      {
-         this.log.trace("get: retrieved bean with cache id " + id);
       }
       
       return bean;
@@ -511,6 +491,7 @@ public class InfinispanStatefulCache implements ClusteredStatefulCache
       // Needed in case this cache is shared
       if ((event.getValue() == null) || !(event.getValue() instanceof StatefulBeanContext)) return;
       
+      this.trace("activated(%s)", event.getKey());
       StatefulBeanContext bean = (StatefulBeanContext) event.getValue();
       
       this.passivatedCount.decrementAndGet();
@@ -548,6 +529,7 @@ public class InfinispanStatefulCache implements ClusteredStatefulCache
       if ((event.getValue() == null) || !(event.getValue() instanceof StatefulBeanContext)) return;
       
       Object key = event.getKey();
+      this.trace("passivated(%s)", key);
       
       StatefulBeanContext bean = (StatefulBeanContext) event.getValue();
       
@@ -667,9 +649,13 @@ public class InfinispanStatefulCache implements ClusteredStatefulCache
    {
       if (this.lockManager == null) return null;
       
+      this.trace("Acquiring %slock on %s", newLock ? "new " : "", id);
+      
       try
       {
-         return this.lockManager.lock(this.getBeanLockKey(id), this.cache.getConfiguration().getLockAcquisitionTimeout(), newLock);
+         LockResult result = this.lockManager.lock(this.getBeanLockKey(id), this.cache.getConfiguration().getLockAcquisitionTimeout(), newLock);
+         this.trace("Lock acquired (%s) on %s", result, id);
+         return result;
       }
       catch (TimeoutException e)
       {
@@ -686,7 +672,9 @@ public class InfinispanStatefulCache implements ClusteredStatefulCache
    {
       if (this.lockManager != null)
       {
+         this.trace("Releasing %slock on %s", remove ? "and removing " : "", id);
          this.lockManager.unlock(this.getBeanLockKey(id), remove);
+         this.trace("Released %slock on %s", remove ? "and removed " : "", id);
       }
    }
    
@@ -754,6 +742,14 @@ public class InfinispanStatefulCache implements ClusteredStatefulCache
       InfinispanStatefulBeanContext(StatefulContainer container, Object bean)
       {
          super(container, bean);
+      }
+   }
+   
+   private void trace(String message, Object... args)
+   {
+      if (this.log.isTraceEnabled())
+      {
+         this.log.trace(String.format(message, args));
       }
    }
 }

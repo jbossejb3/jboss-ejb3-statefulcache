@@ -51,7 +51,7 @@ public class DefaultLockManagerSource implements LockManagerSource
    
    private static final Logger log = Logger.getLogger(DefaultLockManagerSource.class);
    
-   private final Map<String, LockManagerEntry> lockManagers = new HashMap<String, LockManagerEntry>();
+   private static final Map<String, LockManagerEntry> lockManagers = new HashMap<String, LockManagerEntry>();
    
    /**
     * {@inheritDoc}
@@ -60,24 +60,28 @@ public class DefaultLockManagerSource implements LockManagerSource
    @Override
    public SharedLocalYieldingClusterLockManager getLockManager(Cache<?, ?> cache)
    {
-      if (cache.getConfiguration().getCacheMode().isClustered()) return null;
+      if (!cache.getConfiguration().getCacheMode().isClustered()) return null;
       
       EmbeddedCacheManager container = (EmbeddedCacheManager) cache.getCacheManager();
       String clusterName = container.getGlobalConfiguration().getClusterName();
       
-      synchronized (this.lockManagers)
+      synchronized (lockManagers)
       {
-         LockManagerEntry entry = this.lockManagers.get(clusterName);
+         LockManagerEntry entry = lockManagers.get(clusterName);
          
          if (entry == null)
          {
+            trace("Starting lock manager for cluster %s", clusterName);
+            
             entry = new LockManagerEntry(cache);
             
             container.addListener(this);
             
-            this.lockManagers.put(clusterName, entry);
+            lockManagers.put(clusterName, entry);
          }
-
+         
+         trace("Registering %s with lock manager for cluster %s", cache.getName(), clusterName);
+         
          entry.addCache(cache.getName());
          
          return entry.getLockManager();
@@ -166,18 +170,30 @@ public class DefaultLockManagerSource implements LockManagerSource
    {
       String clusterName = event.getCacheManager().getGlobalConfiguration().getClusterName();
       
-      synchronized (this.lockManagers)
+      synchronized (lockManagers)
       {
-         LockManagerEntry entry = this.lockManagers.get(clusterName);
+         LockManagerEntry entry = lockManagers.get(clusterName);
          
          if (entry != null)
          {
+            trace("Deregistering %s from lock manager for cluster %s", event.getCacheName(), clusterName);
+            
             // Returns true if this was the last cache
             if (entry.removeCache(event.getCacheName()))
             {
-               this.lockManagers.remove(clusterName);
+               trace("Stopped lock manager for cluster %s", clusterName);
+               
+               lockManagers.remove(clusterName);
             }
          }
+      }
+   }
+   
+   private static void trace(String message, Object... args)
+   {
+      if (log.isTraceEnabled())
+      {
+         log.trace(String.format(message, args));
       }
    }
 }
