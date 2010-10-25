@@ -19,27 +19,11 @@
 
   <!-- Dependencies -->
   <dependencies>
-    <dependency>
-      <groupId>org.infinispan</groupId>
-      <artifactId>infinispan-core</artifactId>
-      <version>4.2.0.ALPHA4</version>
-      <exclusions>
-        <exclusion>
-          <groupId>log4j</groupId>
-          <artifactId>log4j</artifactId>
-        </exclusion>
-        <exclusion>
-          <!-- Exclude JTA, and redeclare using provided scope -->
-          <groupId>org.jboss.javaee</groupId>
-          <artifactId>jboss-transaction-api</artifactId>
-        </exclusion>
-      </exclusions>
-    </dependency>
     
     <dependency>
       <groupId>org.jboss.cluster</groupId>
       <artifactId>jboss-ha-server-ispn</artifactId>
-      <version>1.0.0.Beta1</version>
+      <version>1.0.0.CR1</version>
       <exclusions>
         <exclusion>
           <groupId>org.infinispan</groupId>
@@ -51,7 +35,7 @@
     <dependency>
       <groupId>org.jboss.cluster</groupId>
       <artifactId>jboss-ha-server-core</artifactId>
-      <version>1.0.0.Beta1</version>
+      <version>1.0.0.CR1</version>
     </dependency>
     
     <dependency>
