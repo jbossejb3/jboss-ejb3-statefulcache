@@ -62,25 +62,27 @@ public class DefaultLockManagerSource implements LockManagerSource
    {
       if (!cache.getConfiguration().getCacheMode().isClustered()) return null;
       
-      EmbeddedCacheManager container = (EmbeddedCacheManager) cache.getCacheManager();
-      String clusterName = container.getGlobalConfiguration().getClusterName();
+      JGroupsTransport transport = (JGroupsTransport) cache.getAdvancedCache().getRpcManager().getTransport();
+      Channel channel = transport.getChannel();
+      String channelName = channel.getName();
       
       synchronized (lockManagers)
       {
-         LockManagerEntry entry = lockManagers.get(clusterName);
+         LockManagerEntry entry = lockManagers.get(channelName);
          
          if (entry == null)
          {
-            trace("Starting lock manager for cluster %s", clusterName);
+            trace("Starting lock manager for cluster %s", channelName);
             
-            entry = new LockManagerEntry(cache);
+            entry = new LockManagerEntry(channel);
             
+            EmbeddedCacheManager container = (EmbeddedCacheManager) cache.getCacheManager();
             container.addListener(this);
             
-            lockManagers.put(clusterName, entry);
+            lockManagers.put(channelName, entry);
          }
          
-         trace("Registering %s with lock manager for cluster %s", cache.getName(), clusterName);
+         trace("Registering %s with lock manager for cluster %s", cache.getName(), channelName);
          
          entry.addCache(cache.getName());
          
@@ -94,11 +96,8 @@ public class DefaultLockManagerSource implements LockManagerSource
       private CoreGroupCommunicationService service;
       private Set<String> caches = new HashSet<String>();
       
-      LockManagerEntry(Cache<?, ?> cache)
+      LockManagerEntry(Channel channel)
       {
-         JGroupsTransport transport = (JGroupsTransport) cache.getAdvancedCache().getRpcManager().getTransport();
-         Channel channel = transport.getChannel();
-         
          this.service = new CoreGroupCommunicationService();
          this.service.setChannel(channel);
          this.service.setScopeId(SCOPE_ID);
