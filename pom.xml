@@ -28,6 +28,21 @@
       </plugins>
    </build>
 
+   <dependencyManagement>
+      <dependencies>
+         <dependency>
+            <groupId>org.jboss.ejb3</groupId>
+            <artifactId>jboss-ejb3-core</artifactId>
+            <version>1.6.0</version>
+         </dependency>
+         <dependency>
+            <groupId>org.jboss.ejb3</groupId>
+            <artifactId>jboss-ejb3-ext-api</artifactId>
+            <version>1.1.1</version>
+         </dependency>
+      </dependencies>
+   </dependencyManagement>
+
    <issueManagement>
       <system>jira</system>
       <url>https://jira.jboss.org/jira/browse/EJBTHREE</url>
@@ -39,8 +54,8 @@
    </modules>
 
    <scm>
-      <connection>scm:git:git://github.com/pferraro/jboss-ejb3-cache-stateful.git</connection>
-      <developerConnection>scm:git:git@github.com:wolfc/jboss-ejb3-cache-stateful.git</developerConnection>
-      <url>http://github.com/pferraro/jboss-ejb3-timeout</url>
+      <connection>scm:git:git://github.com/jbossejb3/jboss-ejb3-statefulcache.git</connection>
+      <developerConnection>scm:git:git@github.com:jbossejb3/jboss-ejb3-statefulcache.git</developerConnection>
+      <url>http://github.com/jbossejb3/jboss-ejb3-statefulcache</url>
    </scm>
 </project>
