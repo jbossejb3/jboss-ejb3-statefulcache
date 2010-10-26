@@ -21,11 +21,6 @@
  */
 package org.jboss.ejb3.cache.infinispan;
 
-import java.util.HashMap;
-import java.util.concurrent.Executors;
-
-import javax.security.jacc.PolicyConfiguration;
-
 import org.jboss.deployers.structure.spi.helpers.AbstractDeploymentContext;
 import org.jboss.deployers.structure.spi.helpers.AbstractDeploymentUnit;
 import org.jboss.ejb3.DependencyPolicy;
@@ -33,11 +28,6 @@ import org.jboss.ejb3.DeploymentScope;
 import org.jboss.ejb3.DeploymentUnit;
 import org.jboss.ejb3.Ejb3Deployment;
 import org.jboss.ejb3.async.spi.AttachmentNames;
-import org.jboss.ejb3.cache.CacheFactoryRegistry;
-import org.jboss.ejb3.cache.Ejb3CacheFactory;
-import org.jboss.ejb3.cache.NoPassivationCacheFactory;
-import org.jboss.ejb3.cache.simple.SimpleStatefulCacheFactory;
-import org.jboss.ejb3.cache.tree.StatefulTreeCacheFactory;
 import org.jboss.ejb3.common.resolvers.plugins.FirstMatchEjbReferenceResolver;
 import org.jboss.ejb3.common.resolvers.spi.EjbReferenceResolver;
 import org.jboss.ejb3.deployers.JBoss5DependencyPolicy;
@@ -47,6 +37,10 @@ import org.jboss.ejb3.pool.PoolFactory;
 import org.jboss.ejb3.pool.PoolFactoryRegistry;
 import org.jboss.ejb3.pool.StrictMaxPoolFactory;
 import org.jboss.ejb3.pool.ThreadlocalPoolFactory;
+
+import javax.security.jacc.PolicyConfiguration;
+import java.util.HashMap;
+import java.util.concurrent.Executors;
 
 /**
  * Comment
@@ -105,14 +99,15 @@ public class MockEjb3Deployment extends Ejb3Deployment
       poolFactories.put("StrictMaxPool", StrictMaxPoolFactory.class);
       poolRegistry.setFactories(poolFactories);
       setPoolFactoryRegistry(poolRegistry);
+      /* normal operation, but ignored in this test suite
       CacheFactoryRegistry cacheRegistry = new CacheFactoryRegistry();
       HashMap<String, Class<? extends Ejb3CacheFactory>> cacheFactories = new HashMap<String, Class<? extends Ejb3CacheFactory>>();
       cacheFactories.put("NoPassivationCache", NoPassivationCacheFactory.class);
       cacheFactories.put("SimpleStatefulCache", SimpleStatefulCacheFactory.class);
-      cacheFactories.put("StatefulTreeCache", StatefulTreeCacheFactory.class);
+      cacheFactories.put("StatefulTreeCache", InfinispanStatefulCacheFactory.class);
       cacheRegistry.setFactories(cacheFactories);
       setCacheFactoryRegistry(cacheRegistry);
-
+      */
    }
 
    @Override
