@@ -49,7 +49,7 @@ public class DefaultLockManagerSource implements LockManagerSource
    /** The service name of the group communication service */
    public static final String SERVICE_NAME = "SFSBOWNER";
    
-   private static final Logger log = Logger.getLogger(DefaultLockManagerSource.class);
+   static final Logger log = Logger.getLogger(DefaultLockManagerSource.class);
    
    private static final Map<String, LockManagerEntry> lockManagers = new HashMap<String, LockManagerEntry>();
    
