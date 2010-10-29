@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Set;
 
 import org.infinispan.Cache;
+import org.infinispan.manager.CacheContainer;
 import org.infinispan.manager.EmbeddedCacheManager;
 import org.infinispan.notifications.Listener;
 import org.infinispan.notifications.cachemanagerlistener.annotation.CacheStopped;
@@ -41,7 +42,7 @@ import org.jgroups.Channel;
  * @author Vladimir Blagojevic
  * @author Paul Ferraro
  */
-@Listener(sync = false)
+@Listener
 public class DefaultLockManagerSource implements LockManagerSource
 {
    /** The scope assigned to our group communication service */
@@ -51,7 +52,8 @@ public class DefaultLockManagerSource implements LockManagerSource
    
    static final Logger log = Logger.getLogger(DefaultLockManagerSource.class);
    
-   private static final Map<String, LockManagerEntry> lockManagers = new HashMap<String, LockManagerEntry>();
+   // Store LockManagers in static map so they can be shared across DCMs
+   private static final Map<LockManagerKey, LockManagerEntry> lockManagers = new HashMap<LockManagerKey, LockManagerEntry>();
    
    /**
     * {@inheritDoc}
@@ -62,27 +64,29 @@ public class DefaultLockManagerSource implements LockManagerSource
    {
       if (!cache.getConfiguration().getCacheMode().isClustered()) return null;
       
-      JGroupsTransport transport = (JGroupsTransport) cache.getAdvancedCache().getRpcManager().getTransport();
-      Channel channel = transport.getChannel();
-      String channelName = channel.getName();
+      CacheContainer container = cache.getCacheManager();
+      
+      String cacheName = cache.getName();
+      LockManagerKey key = new LockManagerKey(container, cacheName);
       
       synchronized (lockManagers)
       {
-         LockManagerEntry entry = lockManagers.get(channelName);
+         LockManagerEntry entry = lockManagers.get(key);
          
          if (entry == null)
          {
-            trace("Starting lock manager for cluster %s", channelName);
+            JGroupsTransport transport = (JGroupsTransport) cache.getAdvancedCache().getRpcManager().getTransport();
+
+            entry = new LockManagerEntry(transport.getChannel());
             
-            entry = new LockManagerEntry(channel);
+            trace("Started lock manager for cluster %s", entry);
             
-            EmbeddedCacheManager container = (EmbeddedCacheManager) cache.getCacheManager();
-            container.addListener(this);
+            ((EmbeddedCacheManager) container).addListener(this);
             
-            lockManagers.put(channelName, entry);
+            lockManagers.put(key, entry);
          }
          
-         trace("Registering %s with lock manager for cluster %s", cache.getName(), channelName);
+         trace("Registering %s with lock manager for cluster %s", cacheName, entry);
          
          entry.addCache(cache.getName());
          
@@ -90,14 +94,52 @@ public class DefaultLockManagerSource implements LockManagerSource
       }
    }
    
+   private static class LockManagerKey
+   {
+      private final CacheContainer container;
+      private final String cacheName;
+      
+      public LockManagerKey(CacheContainer container, String cacheName)
+      {
+         this.container = container;
+         this.cacheName = cacheName;
+      }
+
+      /**
+       * {@inheritDoc}
+       * @see java.lang.Object#hashCode()
+       */
+      @Override
+      public int hashCode()
+      {
+         return this.cacheName.hashCode();
+      }
+
+      /**
+       * {@inheritDoc}
+       * @see java.lang.Object#equals(java.lang.Object)
+       */
+      @Override
+      public boolean equals(Object object)
+      {
+         if ((object == null) || !(object instanceof LockManagerKey)) return false;
+         
+         LockManagerKey key = (LockManagerKey) object;
+         
+         return this.container == key.container && this.cacheName.equals(key.cacheName);
+      }
+   }
+   
    private static class LockManagerEntry
    {
-      private SharedLocalYieldingClusterLockManager lockManager;
-      private CoreGroupCommunicationService service;
-      private Set<String> caches = new HashSet<String>();
+      private final SharedLocalYieldingClusterLockManager lockManager;
+      private final CoreGroupCommunicationService service;
+      private final String channelName;
+      private final Set<String> caches = new HashSet<String>();
       
       LockManagerEntry(Channel channel)
       {
+         this.channelName = channel.getName();
          this.service = new CoreGroupCommunicationService();
          this.service.setChannel(channel);
          this.service.setScopeId(SCOPE_ID);
@@ -162,27 +204,38 @@ public class DefaultLockManagerSource implements LockManagerSource
          
          return empty;
       }
+
+      /**
+       * {@inheritDoc}
+       * @see java.lang.Object#toString()
+       */
+      @Override
+      public String toString()
+      {
+         return this.channelName;
+      }
    }
    
    @CacheStopped
    public void stopped(CacheStoppedEvent event)
    {
-      String clusterName = event.getCacheManager().getGlobalConfiguration().getClusterName();
-      
+      String cacheName = event.getCacheName();
+      LockManagerKey key = new LockManagerKey(event.getCacheManager(), cacheName);
+
       synchronized (lockManagers)
       {
-         LockManagerEntry entry = lockManagers.get(clusterName);
+         LockManagerEntry entry = lockManagers.get(key);
          
          if (entry != null)
          {
-            trace("Deregistering %s from lock manager for cluster %s", event.getCacheName(), clusterName);
+            trace("Deregistering %s from lock manager for cluster %s", cacheName, entry);
             
             // Returns true if this was the last cache
-            if (entry.removeCache(event.getCacheName()))
+            if (entry.removeCache(cacheName))
             {
-               trace("Stopped lock manager for cluster %s", clusterName);
+               trace("Stopped lock manager for cluster %s", entry);
                
-               lockManagers.remove(clusterName);
+               lockManagers.remove(key);
             }
          }
       }

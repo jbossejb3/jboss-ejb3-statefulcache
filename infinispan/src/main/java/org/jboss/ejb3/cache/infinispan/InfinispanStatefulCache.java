@@ -71,12 +71,18 @@ public class InfinispanStatefulCache implements ClusteredStatefulCache
    
    @SuppressWarnings("unchecked")
    // Need to cast since ContextClassLoaderSwitcher.NewInstance does not generically implement PrivilegedAction<ContextClassLoaderSwitcher>
-   private final ContextClassLoaderSwitcher switcher = (ContextClassLoaderSwitcher) AccessController.doPrivileged(ContextClassLoaderSwitcher.INSTANTIATOR);
+   private static final ContextClassLoaderSwitcher switcher = (ContextClassLoaderSwitcher) AccessController.doPrivileged(ContextClassLoaderSwitcher.INSTANTIATOR);
    
+   // Defined in initialize(...)
+   Map<Object, Future<Void>> removeFutures;
+   Map<Object, Future<Void>> evictFutures;
+   Cache<Object, StatefulBeanContext> cache;   
+   Logger log;
+   
+   final ThreadFactory threadFactory;
    private final CacheSource cacheSource;
    private final LockManagerSource lockManagerSource;
    private final CacheInvoker invoker;
-   final ThreadFactory threadFactory;
 
    private final AtomicInteger createCount = new AtomicInteger(0);
    private final AtomicInteger passivatedCount = new AtomicInteger(0);
@@ -85,15 +91,9 @@ public class InfinispanStatefulCache implements ClusteredStatefulCache
    
    private volatile int totalSize = 0;
    
-   // Defined in initialize(...)
-   Map<Object, Future<Void>> removeFutures;
-   Map<Object, Future<Void>> evictFutures;
-   
-   Logger log;
    private StatefulContainer container;
    private CacheConfig cacheConfig;
    private ScheduledExecutorService executor;
-   private Cache<Object, StatefulBeanContext> cache;
    private SharedLocalYieldingClusterLockManager lockManager;
 
    // Defined in start()
@@ -485,21 +485,21 @@ public class InfinispanStatefulCache implements ClusteredStatefulCache
    }
 
    @CacheEntryActivated
-   public void activated(CacheEntryActivatedEvent event)
+   public void activated(CacheEntryActivatedEvent<Object, StatefulBeanContext> event)
    {
       if (event.isPre()) return;
       // Needed in case this cache is shared
       if ((event.getValue() == null) || !(event.getValue() instanceof StatefulBeanContext)) return;
       
       this.trace("activated(%s)", event.getKey());
-      StatefulBeanContext bean = (StatefulBeanContext) event.getValue();
+      StatefulBeanContext bean = event.getValue();
       
       this.passivatedCount.decrementAndGet();
       this.resetTotalSize.set(true);
       
       if (localActivity.get() == Boolean.TRUE)
       {
-         SwitchContext switchContext = this.switcher.getSwitchContext();
+         SwitchContext switchContext = switcher.getSwitchContext();
          ClassLoader classLoader = this.classLoaderRef.get();
          
          try
@@ -522,7 +522,7 @@ public class InfinispanStatefulCache implements ClusteredStatefulCache
    }
 
    @CacheEntryPassivated
-   public void passivated(CacheEntryPassivatedEvent event)
+   public void passivated(CacheEntryPassivatedEvent<Object, StatefulBeanContext> event)
    {
       if (!event.isPre()) return;
       // Needed in case this cache is shared
@@ -531,9 +531,9 @@ public class InfinispanStatefulCache implements ClusteredStatefulCache
       Object key = event.getKey();
       this.trace("passivated(%s)", key);
       
-      StatefulBeanContext bean = (StatefulBeanContext) event.getValue();
+      StatefulBeanContext bean = event.getValue();
       
-      SwitchContext switchContext = this.switcher.getSwitchContext();
+      SwitchContext switchContext = switcher.getSwitchContext();
       ClassLoader classLoader = this.classLoaderRef.get();
       
       Boolean active = localActivity.get();
