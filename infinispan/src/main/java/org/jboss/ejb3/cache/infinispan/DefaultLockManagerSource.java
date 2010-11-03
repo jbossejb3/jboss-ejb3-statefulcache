@@ -21,8 +21,8 @@
  */
 package org.jboss.ejb3.cache.infinispan;
 
-import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -53,7 +53,7 @@ public class DefaultLockManagerSource implements LockManagerSource
    static final Logger log = Logger.getLogger(DefaultLockManagerSource.class);
    
    // Store LockManagers in static map so they can be shared across DCMs
-   private static final Map<LockManagerKey, LockManagerEntry> lockManagers = new HashMap<LockManagerKey, LockManagerEntry>();
+   private static final Map<CacheContainer, LockManagerEntry> lockManagers = new IdentityHashMap<CacheContainer, LockManagerEntry>();
    
    /**
     * {@inheritDoc}
@@ -66,12 +66,9 @@ public class DefaultLockManagerSource implements LockManagerSource
       
       CacheContainer container = cache.getCacheManager();
       
-      String cacheName = cache.getName();
-      LockManagerKey key = new LockManagerKey(container, cacheName);
-      
       synchronized (lockManagers)
       {
-         LockManagerEntry entry = lockManagers.get(key);
+         LockManagerEntry entry = lockManagers.get(container);
          
          if (entry == null)
          {
@@ -83,50 +80,14 @@ public class DefaultLockManagerSource implements LockManagerSource
             
             ((EmbeddedCacheManager) container).addListener(this);
             
-            lockManagers.put(key, entry);
+            lockManagers.put(container, entry);
          }
          
-         trace("Registering %s with lock manager for cluster %s", cacheName, entry);
+         trace("Registering %s with lock manager for cluster %s", cache, entry);
          
          entry.addCache(cache.getName());
          
          return entry.getLockManager();
-      }
-   }
-   
-   private static class LockManagerKey
-   {
-      private final CacheContainer container;
-      private final String cacheName;
-      
-      public LockManagerKey(CacheContainer container, String cacheName)
-      {
-         this.container = container;
-         this.cacheName = cacheName;
-      }
-
-      /**
-       * {@inheritDoc}
-       * @see java.lang.Object#hashCode()
-       */
-      @Override
-      public int hashCode()
-      {
-         return this.cacheName.hashCode();
-      }
-
-      /**
-       * {@inheritDoc}
-       * @see java.lang.Object#equals(java.lang.Object)
-       */
-      @Override
-      public boolean equals(Object object)
-      {
-         if ((object == null) || !(object instanceof LockManagerKey)) return false;
-         
-         LockManagerKey key = (LockManagerKey) object;
-         
-         return this.container == key.container && this.cacheName.equals(key.cacheName);
       }
    }
    
@@ -219,15 +180,16 @@ public class DefaultLockManagerSource implements LockManagerSource
    @CacheStopped
    public void stopped(CacheStoppedEvent event)
    {
-      String cacheName = event.getCacheName();
-      LockManagerKey key = new LockManagerKey(event.getCacheManager(), cacheName);
-
+      CacheContainer container = event.getCacheManager();
+      
       synchronized (lockManagers)
       {
-         LockManagerEntry entry = lockManagers.get(key);
+         LockManagerEntry entry = lockManagers.get(container);
          
          if (entry != null)
          {
+            String cacheName = event.getCacheName();
+
             trace("Deregistering %s from lock manager for cluster %s", cacheName, entry);
             
             // Returns true if this was the last cache
@@ -235,7 +197,7 @@ public class DefaultLockManagerSource implements LockManagerSource
             {
                trace("Stopped lock manager for cluster %s", entry);
                
-               lockManagers.remove(key);
+               lockManagers.remove(container);
             }
          }
       }
