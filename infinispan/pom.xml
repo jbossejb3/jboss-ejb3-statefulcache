@@ -23,7 +23,7 @@
     <dependency>
       <groupId>org.jboss.cluster</groupId>
       <artifactId>jboss-ha-server-ispn</artifactId>
-      <version>1.0.0.CR3</version>
+      <version>1.0.0.CR4</version>
       <exclusions>
         <exclusion>
           <groupId>org.infinispan</groupId>
