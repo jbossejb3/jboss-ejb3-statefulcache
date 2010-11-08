@@ -4,7 +4,7 @@
   <parent>
     <groupId>org.jboss.ejb3.statefulcache</groupId>
     <artifactId>jboss-ejb3-statefulcache</artifactId>
-    <version>1.0.0-alpha-3</version>
+    <version>1.0.0-alpha-4-SNAPSHOT</version>
   </parent>
 
   <modelVersion>4.0.0</modelVersion>
@@ -12,7 +12,7 @@
   <!-- Artifact Information -->
   <artifactId>jboss-ejb3-statefulcache-jbc</artifactId>
   <packaging>jar</packaging>
-  <version>1.0.0-alpha-3</version>
+  <version>1.0.0-alpha-4-SNAPSHOT</version>
   <name>JBoss EJB 3.x JBoss Cache stateful cache provider</name>
   <url>http://labs.jboss.com/jbossejb3</url>
   <description>JBoss EJB 3.x JBoss Cache stateful cache provider</description>
