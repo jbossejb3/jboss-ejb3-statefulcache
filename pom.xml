@@ -10,7 +10,7 @@
 
    <groupId>org.jboss.ejb3.statefulcache</groupId>
    <artifactId>jboss-ejb3-statefulcache</artifactId>
-   <version>1.0.0-alpha-3-SNAPSHOT</version>
+   <version>1.0.0-alpha-4-SNAPSHOT</version>
    <packaging>pom</packaging>
 
    <name>JBoss EJB 3.x Stateful Cache Implementations</name>
