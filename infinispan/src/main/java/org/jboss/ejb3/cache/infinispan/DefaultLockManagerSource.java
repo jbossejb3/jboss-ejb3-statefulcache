@@ -21,13 +21,13 @@
  */
 package org.jboss.ejb3.cache.infinispan;
 
+import java.security.AccessController;
+import java.util.HashMap;
 import java.util.HashSet;
-import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Set;
 
 import org.infinispan.Cache;
-import org.infinispan.manager.CacheContainer;
 import org.infinispan.manager.EmbeddedCacheManager;
 import org.infinispan.notifications.Listener;
 import org.infinispan.notifications.cachemanagerlistener.annotation.CacheStopped;
@@ -36,6 +36,7 @@ import org.infinispan.remoting.transport.jgroups.JGroupsTransport;
 import org.jboss.ha.core.framework.server.CoreGroupCommunicationService;
 import org.jboss.ha.framework.server.lock.SharedLocalYieldingClusterLockManager;
 import org.jboss.logging.Logger;
+import org.jboss.util.loading.ContextClassLoaderSwitcher;
 import org.jgroups.Channel;
 
 /**
@@ -53,7 +54,11 @@ public class DefaultLockManagerSource implements LockManagerSource
    static final Logger log = Logger.getLogger(DefaultLockManagerSource.class);
    
    // Store LockManagers in static map so they can be shared across DCMs
-   private static final Map<CacheContainer, LockManagerEntry> lockManagers = new IdentityHashMap<CacheContainer, LockManagerEntry>();
+   static final Map<String, LockManagerEntry> lockManagers = new HashMap<String, LockManagerEntry>();
+   
+   // Need to cast since ContextClassLoaderSwitcher.NewInstance does not generically implement PrivilegedAction<ContextClassLoaderSwitcher>
+   @SuppressWarnings("unchecked")
+   private final ContextClassLoaderSwitcher switcher = (ContextClassLoaderSwitcher) AccessController.doPrivileged(ContextClassLoaderSwitcher.INSTANTIATOR);
    
    /**
     * {@inheritDoc}
@@ -64,43 +69,54 @@ public class DefaultLockManagerSource implements LockManagerSource
    {
       if (!cache.getConfiguration().getCacheMode().isClustered()) return null;
       
-      CacheContainer container = cache.getCacheManager();
+      EmbeddedCacheManager container = (EmbeddedCacheManager) cache.getCacheManager();
+      String containerName = container.getGlobalConfiguration().getCacheManagerName();
       
       synchronized (lockManagers)
       {
-         LockManagerEntry entry = lockManagers.get(container);
+         LockManagerEntry entry = lockManagers.get(containerName);
          
          if (entry == null)
          {
             JGroupsTransport transport = (JGroupsTransport) cache.getAdvancedCache().getRpcManager().getTransport();
-
-            entry = new LockManagerEntry(transport.getChannel());
             
-            trace("Started lock manager for cluster %s", entry);
+            ContextClassLoaderSwitcher.SwitchContext context = this.switcher.getSwitchContext(this.getClass().getClassLoader());
             
-            ((EmbeddedCacheManager) container).addListener(this);
+            try
+            {
+               entry = new LockManagerEntry(transport.getChannel());
+            }
+            finally
+            {
+               context.reset();
+            }
             
-            lockManagers.put(container, entry);
+            debug("Started lock manager for \"%s\" container", containerName);
+            
+            container.addListener(entry);
+            
+            lockManagers.put(containerName, entry);
          }
          
-         trace("Registering %s with lock manager for cluster %s", cache, entry);
+         String cacheName = cache.getName();
          
-         entry.addCache(cache.getName());
+         debug("Registering \"%s\" cache with lock manager for \"%s\" container", cacheName, containerName);
+         
+         entry.addCache(cacheName);
          
          return entry.getLockManager();
       }
    }
    
-   private static class LockManagerEntry
+   @Listener
+   public static class LockManagerEntry
    {
       private final SharedLocalYieldingClusterLockManager lockManager;
       private final CoreGroupCommunicationService service;
-      private final String channelName;
       private final Set<String> caches = new HashSet<String>();
       
       LockManagerEntry(Channel channel)
       {
-         this.channelName = channel.getName();
          this.service = new CoreGroupCommunicationService();
          this.service.setChannel(channel);
          this.service.setScopeId(SCOPE_ID);
@@ -165,49 +181,39 @@ public class DefaultLockManagerSource implements LockManagerSource
          
          return empty;
       }
-
-      /**
-       * {@inheritDoc}
-       * @see java.lang.Object#toString()
-       */
-      @Override
-      public String toString()
-      {
-         return this.channelName;
-      }
-   }
-   
-   @CacheStopped
-   public void stopped(CacheStoppedEvent event)
-   {
-      CacheContainer container = event.getCacheManager();
       
-      synchronized (lockManagers)
+      @CacheStopped
+      public void stopped(CacheStoppedEvent event)
       {
-         LockManagerEntry entry = lockManagers.get(container);
+         EmbeddedCacheManager container = event.getCacheManager();
+         String containerName = container.getGlobalConfiguration().getCacheManagerName();
          
-         if (entry != null)
+         synchronized (lockManagers)
          {
-            String cacheName = event.getCacheName();
-
-            trace("Deregistering %s from lock manager for cluster %s", cacheName, entry);
+            LockManagerEntry entry = lockManagers.get(containerName);
             
-            // Returns true if this was the last cache
-            if (entry.removeCache(cacheName))
+            if (entry != null)
             {
-               trace("Stopped lock manager for cluster %s", entry);
+               String cacheName = event.getCacheName();
+
+               debug("Deregistering \"%s\" cache from lock manager for \"%s\" container", cacheName, containerName);
                
-               lockManagers.remove(container);
+               // Returns true if this was the last cache
+               if (entry.removeCache(cacheName))
+               {
+                  debug("Stopped lock manager for \"%s\" container", containerName);
+                  
+                  lockManagers.remove(containerName);
+                  
+                  container.removeListener(entry);
+               }
             }
          }
       }
    }
    
-   private static void trace(String message, Object... args)
+   static void debug(String message, Object... args)
    {
-      if (log.isTraceEnabled())
-      {
-         log.trace(String.format(message, args));
-      }
+      log.debug(String.format(message, args));
    }
 }
