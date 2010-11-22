@@ -29,6 +29,7 @@ import org.infinispan.manager.EmbeddedCacheManager;
 import org.jboss.ejb3.annotation.CacheConfig;
 import org.jboss.ejb3.stateful.StatefulContainer;
 import org.jboss.ha.ispn.CacheContainerRegistry;
+import org.jboss.util.StringPropertyReplacer;
 
 /**
  * @author Paul Ferraro
@@ -57,7 +58,7 @@ public class DefaultCacheSource implements CacheSource
    public <K, V> Cache<K, V> getCache(StatefulContainer ejbContainer)
    {
       CacheConfig cacheConfig = ejbContainer.getAnnotation(CacheConfig.class);
-      String containerName = cacheConfig.name();
+      String containerName = StringPropertyReplacer.replaceProperties(cacheConfig.name());
       String templateCacheName = null;
 
       if ((containerName == null) || containerName.isEmpty())
